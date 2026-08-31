@@ -1,0 +1,10 @@
+{
+  "name": "termux-logging",
+  "version": "2026.08.30_01",
+  "description": "Persistent logcat service for Termux. Rotated 50MB x 5 files, runit-managed. Logs to ~/.termux/logs/.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/woodmanlegion/termux-logging"
+  }
+}

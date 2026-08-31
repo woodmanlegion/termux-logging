@@ -1,0 +1,108 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# termux-logging — persistent logcat service manager
+# Repo: woodmanlegion/termux-logging
+# Logs to: ~/.termux/logs/logcat.txt (rotated 50MB x 5 = 250MB max)
+# Service: runit (sv logcat-persist) — starts automatically via termux-services
+#
+# tail ~/.termux/logs/logcat.txt             — live log
+# grep -i "crash\|fatal\|oom" ~/.termux/logs/logcat.txt
+# sv status logcat-persist
+# sv restart logcat-persist
+#
+# Usage:
+#   termux-logging install    Install service and start logging
+#   termux-logging status     Show service status and log file sizes
+#   termux-logging tail       Tail the live log (Ctrl-C to exit)
+#   termux-logging search     grep -i <pattern> logcat.txt
+#   termux-logging uninstall  Stop service and remove sv link
+
+set -euo pipefail
+
+LOG_DIR="${HOME}/.termux/logs"
+SV_NAME="logcat-persist"
+SV_SOURCE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../sv/${SV_NAME}" && pwd)"
+SV_DEST="/data/data/com.termux/files/usr/var/service/${SV_NAME}"
+TERMUX_SV="/data/data/com.termux/files/usr/var/service"
+
+cmd_install() {
+    mkdir -p "$LOG_DIR"
+    echo "[termux-logging] log dir: $LOG_DIR"
+
+    # Write sv run script
+    local run_dest="${SV_DEST}/run"
+    mkdir -p "$SV_DEST"
+    cat > "$run_dest" <<RUNSCRIPT
+#!/data/data/com.termux/files/usr/bin/sh
+# logcat-persist runit service — managed by termux-logging
+exec 2>&1
+exec logcat -v threadtime -b all -f "${LOG_DIR}/logcat.txt" -r 52428800 -n 5
+RUNSCRIPT
+    chmod +x "$run_dest"
+    echo "[termux-logging] service installed: $SV_DEST"
+
+    # Symlink into sv (termux-services picks it up automatically)
+    if [[ ! -e "$SV_DEST" ]]; then
+        ln -sf "$SV_SOURCE" "$SV_DEST"
+    fi
+
+    sv up "$SV_NAME" 2>/dev/null && echo "[termux-logging] service started" || \
+        echo "[termux-logging] start it manually: sv up $SV_NAME"
+
+    # Migrate old logs if present
+    OLD_DIR="${HOME}/logs"
+    if [[ -d "$OLD_DIR" && "$OLD_DIR" != "$LOG_DIR" ]]; then
+        echo "[termux-logging] migrating logs from $OLD_DIR → $LOG_DIR"
+        mv "$OLD_DIR"/logcat.txt* "$LOG_DIR"/ 2>/dev/null || true
+        rm -f "$OLD_DIR"/logcat.txt* 2>/dev/null || true
+        echo "[termux-logging] migration done (old dir left intact)"
+    fi
+
+    echo "[termux-logging] ✓ installed"
+}
+
+cmd_status() {
+    echo "Service: $(sv status "$SV_NAME" 2>/dev/null || echo 'not running')"
+    echo "Log dir: $LOG_DIR"
+    if [[ -d "$LOG_DIR" ]]; then
+        ls -lh "$LOG_DIR"/logcat.txt* 2>/dev/null || echo "(no log files yet)"
+        du -sh "$LOG_DIR" 2>/dev/null
+    fi
+}
+
+cmd_tail() {
+    local log="${LOG_DIR}/logcat.txt"
+    if [[ ! -f "$log" ]]; then
+        echo "No log file at $log — is the service running? (sv status $SV_NAME)"
+        exit 1
+    fi
+    exec tail -f "$log"
+}
+
+cmd_search() {
+    local pattern="${1:-}"
+    if [[ -z "$pattern" ]]; then
+        echo "Usage: termux-logging search <pattern>"
+        exit 1
+    fi
+    grep -i "$pattern" "${LOG_DIR}/logcat.txt"* 2>/dev/null || echo "(no matches)"
+}
+
+cmd_uninstall() {
+    sv down "$SV_NAME" 2>/dev/null || true
+    rm -f "$SV_DEST"
+    echo "[termux-logging] service removed. Log files kept at $LOG_DIR"
+}
+
+case "${1:-}" in
+    install)   cmd_install ;;
+    status)    cmd_status ;;
+    tail)      cmd_tail ;;
+    search)    cmd_search "${2:-}" ;;
+    uninstall) cmd_uninstall ;;
+    *)
+        echo "Usage: termux-logging <install|status|tail|search <pattern>|uninstall>"
+        echo "  Logs: $LOG_DIR"
+        echo "  Service: $SV_NAME (runit)"
+        exit 1
+        ;;
+esac
