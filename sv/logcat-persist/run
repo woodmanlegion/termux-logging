@@ -1,0 +1,5 @@
+#!/data/data/com.termux/files/usr/bin/sh
+# logcat-persist runit service — managed by termux-logging
+# Log path set at install time by: termux-logging install
+exec 2>&1
+exec logcat -v threadtime -b all -f "${HOME}/.termux/logs/logcat.txt" -r 52428800 -n 5
