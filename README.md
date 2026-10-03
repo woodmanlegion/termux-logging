@@ -1,4 +1,16 @@
-# Logs Directory
+# Logs Directory (deprecated — see woodmanlegion/svbase-health)
+
+**Deprecated 2026-10-03.** This repo's one real capability — a runit-managed,
+rotated logcat capture service — has been folded into
+[`woodmanlegion/svbase-health`](https://github.com/woodmanlegion/svbase-health)
+as `extras/install-logcat-persist.sh`. That version fixes a real bug this
+repo had (its own installer wrote the `sv` run script unconditionally, with
+no diff/backup check before overwriting) and registers the service with
+`svbase-health`'s shared health-check/flap-detection watchdog, which this
+standalone version never had. Archived; use the version in `svbase-health`
+going forward.
+
+---
 
 Persistent Android logcat storage for debugging crashes and reboots.
 
